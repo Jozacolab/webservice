@@ -64,19 +64,64 @@
 #     # Certifique-se de que o banco de dados está inicializado antes de iniciar o app
 #     database.init_db()
 #     app.run(debug=True) # debug=True ativa o modo de depuração e recarrega o servidor automaticamente
-
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 import database
 import random
+from datetime import datetime, timedelta
 import json
-from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = 'haru09082025'
 
-# Dados do jogo (em memória para este exemplo simples)
-games = {}
-high_scores = []
+# Gerar dados fictícios para o dashboard
+def generate_fake_data():
+    # Dados de vendas mensais
+    months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 
+              'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+    sales_data = [random.randint(80000, 150000) for _ in range(12)]
+    
+    # Dados de leads por canal
+    lead_channels = ['Organic Search', 'Social Media', 'Email', 'Direct', 'Referral']
+    lead_data = [random.randint(100, 500) for _ in range(5)]
+    
+    # Dados de performance de produtos
+    products = ['Produto A', 'Produto B', 'Produto C', 'Produto D', 'Produto E']
+    product_performance = [random.randint(70, 100) for _ in range(5)]
+    
+    # Dados de métricas de negócio
+    business_metrics = {
+        'receita_total': random.randint(500000, 1000000),
+        'crescimento_mensal': random.randint(5, 15),
+        'novos_clientes': random.randint(100, 500),
+        'taxa_conversao': random.randint(15, 30),
+        'satisfacao_cliente': random.randint(85, 98)
+    }
+    
+    # Dados de atividades recentes
+    activities = []
+    for i in range(10):
+        activities.append({
+            'user': f'Usuário {random.randint(1, 10)}',
+            'action': random.choice(['Adicionou novo cliente', 'Atualizou estoque', 'Criou relatório', 'Realizou venda']),
+            'time': (datetime.now() - timedelta(minutes=random.randint(1, 120))).strftime('%H:%M')
+        })
+    
+    # Dados de tráfego por região
+    regions = ['Norte', 'Nordeste', 'Centro-Oeste', 'Sudeste', 'Sul']
+    traffic_data = [random.randint(1000, 5000) for _ in range(5)]
+    
+    return {
+        'months': months,
+        'sales_data': sales_data,
+        'lead_channels': lead_channels,
+        'lead_data': lead_data,
+        'products': products,
+        'product_performance': product_performance,
+        'business_metrics': business_metrics,
+        'activities': activities,
+        'regions': regions,
+        'traffic_data': traffic_data
+    }
 
 # Rotas
 @app.route('/')
@@ -99,157 +144,39 @@ def login():
             session['username'] = user['username']
             session['user_id'] = user['id']
             flash('Login realizado com sucesso!', 'success')
-            return redirect(url_for('snake_game'))
+            return redirect(url_for('dashboard'))
         else:
             flash('Login ou senha inválidos!', 'error')
             return render_template('login.html')
     
     return render_template('login.html')
 
-@app.route('/snake_game')
-def snake_game():
-    """Página principal do jogo da cobrinha."""
+@app.route('/dashboard')
+def dashboard():
+    """Dashboard principal com dados fictícios."""
     if not session.get('logged_in'):
         flash('Você precisa estar logado para acessar esta página.', 'warning')
         return redirect(url_for('login'))
     
-    # Inicializar ou recuperar jogo do usuário
-    user_id = session.get('user_id')
-    if user_id not in games:
-        games[user_id] = {
-            'score': 0,
-            'level': 1,
-            'game_state': 'not_started'
-        }
+    data = generate_fake_data()
     
-    return render_template('snake_game.html', 
+    return render_template('dashboard.html', 
                          username=session['username'],
-                         high_scores=high_scores[:10])  # Top 10 scores
+                         data=data)
 
-@app.route('/start_game', methods=['POST'])
-def start_game():
-    """Inicia um novo jogo."""
+@app.route('/get_updated_metrics')
+def get_updated_metrics():
+    """Retorna métricas atualizadas para atualização em tempo real."""
     if not session.get('logged_in'):
         return json.dumps({'success': False, 'message': 'Não autenticado'})
     
-    user_id = session.get('user_id')
-    games[user_id] = {
-        'score': 0,
-        'level': 1,
-        'game_state': 'playing',
-        'snake': [[10, 10], [10, 11], [10, 12]],  # Posição inicial da cobra
-        'direction': 'up',
-        'food': [random.randint(0, 19), random.randint(0, 19)],  # Comida em posição aleatória
-        'timestamp': datetime.now().timestamp()
-    }
-    
-    return json.dumps({'success': True, 'game_state': games[user_id]})
-
-@app.route('/move_snake', methods=['POST'])
-def move_snake():
-    """Processa o movimento da cobra."""
-    if not session.get('logged_in'):
-        return json.dumps({'success': False, 'message': 'Não autenticado'})
-    
-    user_id = session.get('user_id')
-    if user_id not in games or games[user_id]['game_state'] != 'playing':
-        return json.dumps({'success': False, 'message': 'Jogo não iniciado'})
-    
-    data = request.get_json()
-    direction = data.get('direction')
-    
-    # Validar direção (não pode ser oposta à atual)
-    opposite_directions = {'up': 'down', 'down': 'up', 'left': 'right', 'right': 'left'}
-    if direction and direction != opposite_directions.get(games[user_id]['direction']):
-        games[user_id]['direction'] = direction
-    
-    # Mover a cobra
-    head = games[user_id]['snake'][0].copy()
-    
-    if games[user_id]['direction'] == 'up':
-        head[0] -= 1
-    elif games[user_id]['direction'] == 'down':
-        head[0] += 1
-    elif games[user_id]['direction'] == 'left':
-        head[1] -= 1
-    elif games[user_id]['direction'] == 'right':
-        head[1] += 1
-    
-    # Verificar colisões com as bordas
-    if head[0] < 0 or head[0] >= 20 or head[1] < 0 or head[1] >= 20:
-        games[user_id]['game_state'] = 'game_over'
-        return json.dumps({
-            'success': True, 
-            'game_state': games[user_id],
-            'game_over': True
-        })
-    
-    # Verificar colisão com o próprio corpo
-    if head in games[user_id]['snake']:
-        games[user_id]['game_state'] = 'game_over'
-        return json.dumps({
-            'success': True, 
-            'game_state': games[user_id],
-            'game_over': True
-        })
-    
-    # Adicionar nova cabeça
-    games[user_id]['snake'].insert(0, head)
-    
-    # Verificar se comeu a comida
-    ate_food = False
-    if head == games[user_id]['food']:
-        games[user_id]['score'] += 10 * games[user_id]['level']
-        games[user_id]['food'] = [random.randint(0, 19), random.randint(0, 19)]
-        ate_food = True
-        
-        # Aumentar nível a cada 50 pontos
-        if games[user_id]['score'] // 50 + 1 > games[user_id]['level']:
-            games[user_id]['level'] = games[user_id]['score'] // 50 + 1
-    else:
-        # Remover cauda se não comeu
-        games[user_id]['snake'].pop()
+    data = generate_fake_data()
     
     return json.dumps({
-        'success': True, 
-        'game_state': games[user_id],
-        'ate_food': ate_food,
-        'game_over': False
+        'success': True,
+        'business_metrics': data['business_metrics'],
+        'sales_data': data['sales_data']
     })
-
-@app.route('/save_score', methods=['POST'])
-def save_score():
-    """Salva a pontuação do jogador."""
-    if not session.get('logged_in'):
-        return json.dumps({'success': False, 'message': 'Não autenticado'})
-    
-    user_id = session.get('user_id')
-    if user_id not in games or games[user_id]['game_state'] != 'game_over':
-        return json.dumps({'success': False, 'message': 'Jogo não finalizado'})
-    
-    data = request.get_json()
-    score = data.get('score', 0)
-    
-    # Adicionar à lista de highscores
-    high_scores.append({
-        'username': session['username'],
-        'score': score,
-        'date': datetime.now().strftime('%Y-%m-%d %H:%M')
-    })
-    
-    # Ordenar por pontuação (maior primeiro)
-    high_scores.sort(key=lambda x: x['score'], reverse=True)
-    
-    # Manter apenas os 100 melhores scores
-    while len(high_scores) > 100:
-        high_scores.pop()
-    
-    return json.dumps({'success': True})
-
-@app.route('/get_highscores')
-def get_highscores():
-    """Retorna a lista de highscores."""
-    return json.dumps(high_scores[:10])
 
 @app.route('/logout')
 def logout():

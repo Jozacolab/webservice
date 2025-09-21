@@ -1,0 +1,5 @@
+cd "C:\Users\Studio\OneDrive\Área de Trabalho\Faculdade\webservice"
+git add .
+git commit -m "Descrição do que foi alterado"
+git pull origin main --rebase
+git push origin main

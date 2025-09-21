@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login com Fundo Animado</title>
+  <!-- Link para o CSS usando url_for do Flask -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  <canvas id="bg"></canvas>
+
+  <div class="container">
+    <form class="Login-form" method="POST" action="/login">
+      <label for="Login">Login:</label><br>
+      <input type="text" id="login" name="login" required>
+      <br><br>
+      <label for="Senha">Senha:</label><br>
+      <input type="password" id="senha" name="senha" required>
+      <br><br>
+      <input type="submit" value="Entrar">
+      <br><br>
+      <a href="#">Esqueceu a Senha?</a>
+    </form>
+  </div>
+
+  <!-- Link para o JavaScript usando url_for do Flask -->
+  <script src="{{ url_for('static', filename='js/particles.js') }}"></script>
+
+</body>
+</html>

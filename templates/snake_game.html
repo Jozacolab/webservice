@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo da Cobrinha</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        #game-board {
+            display: grid;
+            grid-template-columns: repeat(20, 20px);
+            grid-template-rows: repeat(20, 20px);
+            gap: 1px;
+            margin: 20px auto;
+            background-color: #ddd;
+            border: 2px solid #333;
+        }
+        .cell {
+            width: 20px;
+            height: 20px;
+            background-color: white;
+        }
+        .snake {
+            background-color: #4CAF50;
+        }
+        .food {
+            background-color: #F44336;
+            border-radius: 50%;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .score-board {
+            margin: 20px 0;
+            font-size: 18px;
+        }
+        .high-scores {
+            margin-top: 30px;
+            text-align: left;
+        }
+        .high-scores h3 {
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+        .touch-controls {
+            display: grid;
+            grid-template-areas: 
+                ". up ."
+                "left . right"
+                ". down .";
+            gap: 10px;
+            margin: 20px auto;
+            max-width: 200px;
+        }
+        .touch-btn {
+            width: 60px;
+            height: 60px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        #up { grid-area: up; }
+        #left { grid-area: left; }
+        #right { grid-area: right; }
+        #down { grid-area: down; }
+        @media (min-width: 768px) {
+            .touch-controls {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Jogo da Cobrinha</h1>
+        <p>Olá, {{ username }}! <a href="{{ url_for('logout') }}">Sair</a></p>
+        
+        <div class="score-board">
+            <div>Pontuação: <span id="score">0</span></div>
+            <div>Nível: <span id="level">1</span></div>
+        </div>
+        
+        <div id="game-board"></div>
+        
+        <div class="controls">
+            <button id="start-btn">Iniciar Jogo</button>
+            <button id="pause-btn" disabled>Pausar</button>
+        </div>
+        
+        <div class="touch-controls">
+            <button class="touch-btn" id="up">↑</button>
+            <button class="touch-btn" id="left">←</button>
+            <button class="touch-btn" id="right">→</button>
+            <button class="touch-btn" id="down">↓</button>
+        </div>
+        
+        <div class="high-scores">
+            <h3>Melhores Pontuações</h3>
+            <ol id="highscores-list">
+                {% for score in high_scores %}
+                <li>{{ score.username }} - {{ score.score }} ({{ score.date }})</li>
+                {% endfor %}
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        const gameBoard = document.getElementById('game-board');
+        const scoreDisplay = document.getElementById('score');
+        const levelDisplay = document.getElementById('level');
+        const startBtn = document.getElementById('start-btn');
+        const pauseBtn = document.getElementById('pause-btn');
+        const highscoresList = document.getElementById('highscores-list');
+        
+        // Criar o tabuleiro do jogo
+        for (let i = 0; i < 400; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.id = `cell-${i}`;
+            gameBoard.appendChild(cell);
+        }
+        
+        // Variáveis do jogo
+        let gameInterval;
+        let gameState = {
+            score: 0,
+            level: 1,
+            gameState: 'not_started',
+            snake: [],
+            direction: 'up',
+            food: []
+        };
+        
+        // Iniciar jogo
+        startBtn.addEventListener('click', () => {
+            if (startBtn.textContent === 'Iniciar Jogo') {
+                fetch('/start_game', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        gameState = data.game_state;
+                        updateGameBoard();
+                        startBtn.textContent = 'Reiniciar';
+                        pauseBtn.disabled = false;
+                        startGameLoop();
+                    }
+                });
+            } else {
+                // Reiniciar jogo
+                clearInterval(gameInterval);
+                startBtn.click();
+            }
+        });
+        
+        // Pausar jogo
+        pauseBtn.addEventListener('click', () => {
+            if (pauseBtn.textContent === 'Pausar') {
+                clearInterval(gameInterval);
+                pauseBtn.textContent = 'Continuar';
+            } else {
+                pauseBtn.textContent = 'Pausar';
+                startGameLoop();
+            }
+        });
+        
+        // Controles de teclado
+        document.addEventListener('keydown', (e) => {
+            if (gameState.gameState !== 'playing') return;
+            
+            switch(e.key) {
+                case 'ArrowUp':
+                    changeDirection('up');
+                    break;
+                case 'ArrowDown':
+                    changeDirection('down');
+                    break;
+                case 'ArrowLeft':
+                    changeDirection('left');
+                    break;
+                case 'ArrowRight':
+                    changeDirection('right');
+                    break;
+            }
+        });
+        
+        // Controles de toque
+        document.getElementById('up').addEventListener('click', () => changeDirection('up'));
+        document.getElementById('down').addEventListener('click', () => changeDirection('down'));
+        document.getElementById('left').addEventListener('click', () => changeDirection('left'));
+        document.getElementById('right').addEventListener('click', () => changeDirection('right'));
+        
+        // Controles de mouse (arrastar)
+        let touchStartX = 0;
+        let touchStartY = 0;
+        
+        gameBoard.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            e.preventDefault();
+        }, { passive: false });
+        
+        gameBoard.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+        
+        gameBoard.addEventListener('touchend', (e) => {
+            if (gameState.gameState !== 'playing') return;
+            
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            
+            const diffX = touchEndX - touchStartX;
+            const diffY = touchEndY - touchStartY;
+            
+            // Determinar a direção com base no movimento
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                if (diffX > 0) {
+                    changeDirection('right');
+                } else {
+                    changeDirection('left');
+                }
+            } else {
+                if (diffY > 0) {
+                    changeDirection('down');
+                } else {
+                    changeDirection('up');
+                }
+            }
+            
+            e.preventDefault();
+        }, { passive: false });
+        
+        // Função para mudar a direção
+        function changeDirection(direction) {
+            if (gameState.gameState !== 'playing') return;
+            
+            fetch('/move_snake', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ direction: direction })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    gameState = data.game_state;
+                    updateGameBoard();
+                    scoreDisplay.textContent = gameState.score;
+                    levelDisplay.textContent = gameState.level;
+                    
+                    if (data.game_over) {
+                        clearInterval(gameInterval);
+                        pauseBtn.disabled = true;
+                        
+                        // Salvar pontuação
+                        fetch('/save_score', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ score: gameState.score })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                updateHighscores();
+                            }
+                        });
+                    }
+                }
+            });
+        }
+        
+        // Iniciar o loop do jogo
+        function startGameLoop() {
+            clearInterval(gameInterval);
+            gameInterval = setInterval(() => {
+                if (gameState.gameState === 'playing') {
+                    // Manter a direção atual
+                    fetch('/move_snake', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ direction: gameState.direction })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            gameState = data.game_state;
+                            updateGameBoard();
+                            scoreDisplay.textContent = gameState.score;
+                            levelDisplay.textContent = gameState.level;
+                            
+                            if (data.game_over) {
+                                clearInterval(gameInterval);
+                                pauseBtn.disabled = true;
+                                
+                                // Salvar pontuação
+                                fetch('/save_score', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({ score: gameState.score })
+                                })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success) {
+                                        updateHighscores();
+                                    }
+                                });
+                            }
+                        }
+                    });
+                }
+            }, 300 - (gameState.level - 1) * 20); // Aumenta a velocidade com o nível
+        }
+        
+        // Atualizar o tabuleiro do jogo
+        function updateGameBoard() {
+            // Limpar o tabuleiro
+            for (let i = 0; i < 400; i++) {
+                const cell = document.getElementById(`cell-${i}`);
+                cell.className = 'cell';
+            }
+            
+            // Desenhar a cobra
+            gameState.snake.forEach((segment, index) => {
+                const pos = segment[0] * 20 + segment[1];
+                const cell = document.getElementById(`cell-${pos}`);
+                if (cell) {
+                    cell.className = 'cell snake';
+                }
+            });
+            
+            // Desenhar a comida
+            const foodPos = gameState.food[0] * 20 + gameState.food[1];
+            const foodCell = document.getElementById(`cell-${foodPos}`);
+            if (foodCell) {
+                foodCell.className = 'cell food';
+            }
+        }
+        
+        // Atualizar a lista de highscores
+        function updateHighscores() {
+            fetch('/get_highscores')
+            .then(response => response.json())
+            .then(scores => {
+                highscoresList.innerHTML = '';
+                scores.forEach(score => {
+                    const li = document.createElement('li');
+                    li.textContent = `${score.username} - ${score.score} (${score.date})`;
+                    highscoresList.appendChild(li);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
